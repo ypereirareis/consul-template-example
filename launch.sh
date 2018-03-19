@@ -4,10 +4,15 @@ set -eu
 CONSUL_AGENT_NAME="consul-agent-test"
 CONSUL_TEMPLATE_NAME="consul-template-test"
 CONSUL_NETWORK_NAME="consul-network-test"
+CONSUL_TEMPLATE_IMG_NAME="ypr-consul-template"
 
 NETWORK_ADDRESS="10.123.100.76"
 FIRST_IP=""
 SECOND_IP=""
+
+build() {
+    docker build -t "${CONSUL_TEMPLATE_IMG_NAME}" .
+}
 
 # Remove the stack
 remove() {
@@ -33,11 +38,12 @@ start_template() {
     docker run -d --net="${CONSUL_NETWORK_NAME}" \
         --ip="${SECOND_IP}" \
         --name="${CONSUL_TEMPLATE_NAME}" \
-        -v `pwd`/config:/tmp \
-            hashicorp/consul-template:alpine \
+        -v `pwd`/config:/generated \
+        -v /var/run/docker.sock:/var/run/docker.sock \
+            "${CONSUL_TEMPLATE_IMG_NAME}" \
                 -consul-addr "${FIRST_IP}":8500 \
-                -template "/tmp/config-dev.tpl:/tmp/dev.json" \
-                -template "/tmp/config-prod.tpl:/tmp/prod.json" \
+                -template "/generated/config-dev.tpl:/generated/dev.json:docker ps" \
+                -template "/generated/config-prod.tpl:/generated/prod.json" \
                 -log-level info
 }
 
@@ -49,13 +55,14 @@ insert_default_keys() {
 
 start() {
     remove
+    build
     start_agent
     start_template
     echo "You can visit: http://${FIRST_IP}:8500"
     sleep 5
     insert_default_keys
 
-     watch -n 1 cat ./config/dev.json ./config/prod.json
+     #watch -n 1 cat ./config/dev.json ./config/prod.json
 }
 
 help() {
@@ -72,11 +79,9 @@ nextip() {
     echo "$NEXT_IP"
 }
 
-
 GATEWAY_IP=$(nextip $NETWORK_ADDRESS)
 FIRST_IP=$(nextip $GATEWAY_IP)
 SECOND_IP=$(nextip $FIRST_IP)
-
 
 [[ "" ==  "$*" ]] && help || "$*"
 
