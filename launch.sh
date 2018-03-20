@@ -1,23 +1,37 @@
 #!/usr/bin/env bash
-set -eu
+set -o nounset
+set -o errexit
+set -o pipefail
 
-CONSUL_AGENT_NAME="consul-agent-test"
-CONSUL_TEMPLATE_NAME="consul-template-test"
-CONSUL_NETWORK_NAME="consul-network-test"
-CONSUL_TEMPLATE_IMG_NAME="ypr-consul-template"
+readonly CONSUL_AGENT_NAME="consul-agent-test"
+readonly CONSUL_TEMPLATE_NAME="consul-template-test"
+readonly CONSUL_NETWORK_NAME="consul-network-test"
+readonly CONSUL_TEMPLATE_IMG_NAME="ypr-consul-template"
+readonly NETWORK_ADDRESS="10.123.100.76"
 
-NETWORK_ADDRESS="10.123.100.76"
-FIRST_IP=""
-SECOND_IP=""
+help() {
+    echo "Usage"
+    echo "./launch [start | remove | help]"
+    exit 0
+}
 
+nextip() {
+    local IP=$1
+    local IP_HEX=$(printf '%.2X%.2X%.2X%.2X\n' `echo $IP | sed -e 's/\./ /g'`)
+    local NEXT_IP_HEX=$(printf %.8X `echo $(( 0x$IP_HEX + 1 ))`)
+    local NEXT_IP=$(printf '%d.%d.%d.%d\n' `echo $NEXT_IP_HEX | sed -r 's/(..)/0x\1 /g'`)
+
+    echo "$NEXT_IP"
+}
+
+# Build the Docker image for consul-template with dind.
 build() {
     docker build -t "${CONSUL_TEMPLATE_IMG_NAME}" .
 }
 
-# Remove the stack
+# Remove the stack if needed
 remove() {
-    docker rm -f "${CONSUL_AGENT_NAME}" || true
-    docker rm -f "${CONSUL_TEMPLATE_NAME}" || true
+    docker rm -f "${CONSUL_AGENT_NAME}" "${CONSUL_TEMPLATE_NAME}" || true
     docker network rm "${CONSUL_NETWORK_NAME}" || true
     docker network create --subnet="${NETWORK_ADDRESS}/24" "${CONSUL_NETWORK_NAME}"
 }
@@ -65,28 +79,18 @@ start() {
      #watch -n 1 cat ./config/dev.json ./config/prod.json
 }
 
-help() {
-    echo "Usage"
-    echo "./launch [start | remove | help]"
-    exit 0
+main() {
+    readonly GATEWAY_IP=$(nextip $NETWORK_ADDRESS)
+    readonly FIRST_IP=$(nextip $GATEWAY_IP)
+    readonly SECOND_IP=$(nextip $FIRST_IP)
+
+    if [ -n "$(type -t $*)" ] && [ "$(type -t $*)" = function ]; then
+        "$*"
+    else
+        help
+    fi
 }
 
-nextip() {
-    IP=$1
-    IP_HEX=$(printf '%.2X%.2X%.2X%.2X\n' `echo $IP | sed -e 's/\./ /g'`)
-    NEXT_IP_HEX=$(printf %.8X `echo $(( 0x$IP_HEX + 1 ))`)
-    NEXT_IP=$(printf '%d.%d.%d.%d\n' `echo $NEXT_IP_HEX | sed -r 's/(..)/0x\1 /g'`)
-    echo "$NEXT_IP"
-}
-
-GATEWAY_IP=$(nextip $NETWORK_ADDRESS)
-FIRST_IP=$(nextip $GATEWAY_IP)
-SECOND_IP=$(nextip $FIRST_IP)
-
-[[ "" ==  "$*" ]] && help || "$*"
-
-
-
-
+main $*
 
 
