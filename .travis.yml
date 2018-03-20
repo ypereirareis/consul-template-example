@@ -1,0 +1,15 @@
+sudo: required
+
+language: bash
+
+services:
+  - docker
+
+script:
+  - chmod +x launch.sh
+  - chmod +x tests.sh
+  - bash tests.sh
+
+after_script:
+  - docker logs consul-template-test
+  - bash ./launch.sh remove

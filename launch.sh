@@ -7,7 +7,7 @@ readonly CONSUL_AGENT_NAME="consul-agent-test"
 readonly CONSUL_TEMPLATE_NAME="consul-template-test"
 readonly CONSUL_NETWORK_NAME="consul-network-test"
 readonly CONSUL_TEMPLATE_IMG_NAME="ypr-consul-template"
-readonly NETWORK_ADDRESS="10.123.100.76"
+readonly CONSUL_NETWORK_ADDRESS="10.123.100.76"
 
 help() {
     echo "Usage"
@@ -26,14 +26,16 @@ nextip() {
 
 # Build the Docker image for consul-template with dind.
 build() {
-    docker build -t "${CONSUL_TEMPLATE_IMG_NAME}" .
+    local user_id=`id -u`
+    local docker_group=`stat -c '%g' /var/run/docker.sock`
+    docker build --build-arg HOST_USER_ID=${user_id} --build-arg HOST_DOCKER_GID=${docker_group} -t "${CONSUL_TEMPLATE_IMG_NAME}" .
 }
 
 # Remove the stack if needed
 remove() {
     docker rm -f "${CONSUL_AGENT_NAME}" "${CONSUL_TEMPLATE_NAME}" || true
     docker network rm "${CONSUL_NETWORK_NAME}" || true
-    docker network create --subnet="${NETWORK_ADDRESS}/24" "${CONSUL_NETWORK_NAME}"
+    docker network create --subnet="${CONSUL_NETWORK_ADDRESS}/24" "${CONSUL_NETWORK_NAME}"
 }
 
 # Run consul agent
@@ -80,7 +82,7 @@ start() {
 }
 
 main() {
-    readonly GATEWAY_IP=$(nextip $NETWORK_ADDRESS)
+    readonly GATEWAY_IP=$(nextip $CONSUL_NETWORK_ADDRESS)
     readonly FIRST_IP=$(nextip $GATEWAY_IP)
     readonly SECOND_IP=$(nextip $FIRST_IP)
 
